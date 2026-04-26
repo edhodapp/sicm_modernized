@@ -53,6 +53,83 @@ Each phase is a usable artifact on its own.
 GPU work runs **locally only**. CI uses standard Linux runners
 and skips GPU-tagged tests (per `DECISIONS.md` D004).
 
+## Ontology
+
+The project tracks its formal-knowledge graph in a Pydantic-validated
+ontology with YAML as the primary authoring surface. The DAG models
+the SICM domain at design granularity: mathematical objects, the
+relations between them, the numerical methods that realize them, the
+invariants those methods must preserve, the code that implements
+them, the chapters where they teach, the tests that verify them, and
+the decisions that justify them.
+
+### Eight node types
+
+| Node type | What it is | Examples |
+|---|---|---|
+| `mathematical_object` | A first-class object in the formalism | action `S`, Lagrangian `L`, Hamiltonian `H`, manifold, vector field, k-form, metric, Riemann tensor, wavefunction |
+| `mathematical_relation` | An equation or transform connecting math objects | Euler-Lagrange, Legendre transform, geodesic equation, Schrödinger equation |
+| `numerical_method` | A finite-computation algorithm realizing a math object | leapfrog, Yoshida-4 symplectic, split-operator FFT, path-integral Monte Carlo |
+| `invariant` | A conserved quantity or preserved structure | energy, symplectic 2-form, time-reversal symmetry, action variable |
+| `code_module` | A source file in the project | a Racket file, a Typed Racket numerical module, a CUDA kernel, a JAX reference |
+| `pedagogical_unit` | A chapter / section / exercise mapping | "SICM-1e Ch3.4", "FDG Ch5", "original: action-as-functional intro" |
+| `verification_case` | A test that checks correctness | analytical-solution comparison, JAX-reference cross-check, invariant property test |
+| `decision_ref` | Pointer to a `DECISIONS.md` entry | D001, D002, D003, D004 |
+
+### Key edges
+
+Edges live as named-string fields on the source node (no separate
+edge collection). The `Ontology` validator cross-resolves all
+references at load time and refuses unknowns.
+
+- `code_module --realizes--> mathematical_object`
+- `code_module --implements--> numerical_method`
+- `numerical_method --realizes--> mathematical_object`
+- `numerical_method --preserves--> invariant`
+- `mathematical_relation --derives_to--> mathematical_object | mathematical_relation`
+- `pedagogical_unit --covers--> mathematical_object`
+- `pedagogical_unit --prerequisites--> pedagogical_unit` (must form a DAG)
+- `verification_case --asserts--> invariant`
+- `verification_case --tests--> numerical_method | mathematical_object`
+- any node `--decision_refs--> decision_ref`
+
+### Status discipline
+
+Every node carries `status ∈ {spec, tested, implemented, deviation, n_a}`:
+
+- `spec` — written down; no `implementation_refs`, no `verification_refs`
+- `tested` — `verification_refs` populated; `implementation_refs` may be empty
+- `implemented` — both ref lists populated
+- `deviation` — system does not satisfy this; rationale belongs in description
+- `n_a` — not applicable to current scope; retained for traceability
+
+The discipline is enforced at Pydantic-validation time. The
+`audit-ontology` tool (Day 3) additionally resolves
+`implementation_refs` and `verification_refs` against the working
+tree and refuses dangling references.
+
+### Files
+
+- [`tooling/sicm-ontology.yaml`](tooling/sicm-ontology.yaml) — primary
+  authoring surface (human-edited)
+- `tooling/sicm-ontology.json` — built snapshot (`build-sicm-ontology`)
+- `tooling/sicm-ontology.json.sha256` — content-hash sidecar
+- [`tooling/src/sicm_ontology/`](tooling/src/sicm_ontology/) — Pydantic
+  models, builder, persistence (`models.py`, `build.py`, `dag.py`,
+  `types.py`, `__init__.py`)
+
+### Methodology lineage
+
+The ontology pattern (Pydantic + YAML + content-hash snapshot, eight
+domain-specific node kinds, status discipline, named-string edges,
+cross-reference resolution at load time) is **re-derived** from
+iomoments and fireasmserver per `DECISIONS.md` D002. Per the global
+"principles transfer; processes do not" rule, the *abstractions* are
+inherited; the SICM-specific node taxonomy and edge types are
+project-local. SICM is the third independent re-derivation across the
+trio; surviving abstractions become candidates for an eventual common
+toolkit.
+
 ## Quality gates
 
 The project operates in CD-first deliverable mode (`DECISIONS.md`

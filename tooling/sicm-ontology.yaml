@@ -1,0 +1,198 @@
+# sicm_modernized ontology — primary authoring surface.
+#
+# This YAML is parsed into Pydantic models by tooling/src/sicm_ontology/
+# and serialized to tooling/sicm-ontology.json with a .sha256 sidecar.
+# Keep entries grouped by node kind, in creation order. The audit tool
+# (tooling/src/audit_ontology/, Day 3) cross-checks references against
+# the working tree.
+#
+# See DECISIONS.md D002 for the methodology lineage; PROJECT_NOTES.md
+# §11 for the project arc that constrains scope per phase.
+
+version: "0.1.0"
+project: "sicm_modernized"
+
+# --------------------------------------------------------------------
+# decisions — back-pointers to DECISIONS.md entries. Add new entries
+# here as the corresponding D-N is written. Title is denormalized for
+# context; the audit tool will diff this against the actual file.
+# --------------------------------------------------------------------
+decisions:
+  - name: D001
+    decision_id: D001
+    title: "Project scope and working name"
+    description: |
+      Initiate sicm_modernized; modernize SICM 1e/2e + FDG; extend to
+      GR (geodesics in fixed backgrounds) and QM (Schrödinger + path
+      integral + phase-space). Working package name pinned; final
+      artifact title deferred.
+    status: implemented
+    implementation_refs:
+      - "DECISIONS.md:D001"
+    verification_refs:
+      - "DECISIONS.md:D001"
+
+  - name: D002
+    decision_id: D002
+    title: "CD-first deliverable mode; methodology re-derived from iomoments + fireasm"
+    description: |
+      Apply the iomoments/fireasm SysE-discipline pattern (ontology
+      DAG, audit, two-tier gates, immutable DECISIONS.md). Re-derived,
+      not forked from python_agent.
+    status: implemented
+    implementation_refs:
+      - "DECISIONS.md:D002"
+    verification_refs:
+      - "DECISIONS.md:D002"
+
+  - name: D003
+    decision_id: D003
+    title: "Language stack: Racket CS + Python + JAX + CUDA C"
+    description: |
+      Racket CS symbolic top; Typed Racket numerical mid; Python +
+      JAX as test oracle and prototyping; CUDA C for production GPU.
+      Hybrid (option C) JAX-as-oracle posture.
+    status: implemented
+    implementation_refs:
+      - "DECISIONS.md:D003"
+    verification_refs:
+      - "DECISIONS.md:D003"
+
+  - name: D004
+    decision_id: D004
+    title: "GPU testing policy: local-only, never in CI"
+    description: |
+      GPU-tagged tests run pre-push only; CI skips them. GitHub Pro
+      does not include GPU runners in its free quota.
+    status: implemented
+    implementation_refs:
+      - "DECISIONS.md:D004"
+    verification_refs:
+      - "DECISIONS.md:D004"
+
+# --------------------------------------------------------------------
+# mathematical_objects — first-class objects in the formalism.
+#
+# Phase 1 scope: classical mechanics. We bootstrap with the three
+# objects that anchor the action-principle keystone (PROJECT_NOTES.md
+# §10): action, Lagrangian, Hamiltonian. The action is THE central
+# object across all four phases (classical, GR, QM, field theory) so
+# it lands first; L and H follow as the variational and canonical
+# pictures of classical mechanics.
+# --------------------------------------------------------------------
+mathematical_objects:
+  - name: action
+    description: |
+      The action functional S = integral of L dt evaluated along a
+      path q(t). The single most important object in this project:
+      classical mechanics stationarizes it, path-integral QM sums
+      over it, GR stationarizes it on a spacetime manifold, field
+      theory generalizes it to spacetime integrals. PROJECT_NOTES.md
+      §10 names this the architectural keystone of the whole arc.
+    status: spec
+    decision_refs: [D001]
+    latex_repr: "S = int L dt"
+    domain: "path_space"
+    phase: classical
+
+  - name: lagrangian
+    description: |
+      The Lagrangian function L(q, qdot, t) on the tangent bundle of
+      configuration space. Integrand of the action. Subject of the
+      Euler-Lagrange variational principle.
+    status: spec
+    decision_refs: [D001]
+    latex_repr: "L(q, qdot, t)"
+    domain: "tangent_bundle"
+    phase: classical
+
+  - name: hamiltonian
+    description: |
+      The Hamiltonian function H(q, p, t) on the cotangent bundle.
+      Legendre-transform image of the Lagrangian. Generates the
+      symplectic Hamiltonian flow on phase space.
+    status: spec
+    decision_refs: [D001]
+    latex_repr: "H(q, p, t)"
+    domain: "cotangent_bundle"
+    phase: classical
+
+# --------------------------------------------------------------------
+# mathematical_relations — equations and transforms.
+# --------------------------------------------------------------------
+mathematical_relations:
+  - name: euler_lagrange
+    description: |
+      The Euler-Lagrange equations: stationary-action condition delta
+      S = 0 yields d/dt(dL/dqdot) - dL/dq = 0, i.e., the equations of
+      motion in Lagrangian form.
+    status: spec
+    decision_refs: [D001]
+    latex_repr: "d/dt (dL/dqdot) - dL/dq = 0"
+    kind: variational
+    phase: classical
+    appears_in: [lagrangian, action]
+
+  - name: legendre_transform
+    description: |
+      The Legendre transform L -> H taking Lagrangian to Hamiltonian
+      via p := dL/dqdot and H(q, p, t) := p qdot - L(q, qdot, t).
+      Bridges the tangent-bundle and cotangent-bundle pictures of
+      classical mechanics.
+    status: spec
+    decision_refs: [D001]
+    latex_repr: "H = p qdot - L"
+    kind: transform
+    phase: classical
+    appears_in: [lagrangian]
+    derives_to: [hamiltonian]
+
+# --------------------------------------------------------------------
+# invariants — what the numerical methods must conserve.
+# --------------------------------------------------------------------
+invariants:
+  - name: energy_conservation
+    description: |
+      For a time-independent Hamiltonian, the value H(q(t), p(t)) is
+      conserved along the flow. Symplectic integrators conserve a
+      modified Hamiltonian exactly and the true H to bounded drift
+      over exponentially long times — both forms are valuable as
+      verification cases.
+    status: spec
+    decision_refs: [D001]
+    bound_type: bounded_drift
+    noether_origin: "time_translation_symmetry"
+    phase: classical
+
+  - name: symplectic_2_form
+    description: |
+      The symplectic 2-form omega = dq wedge dp on phase space.
+      Preserved by the Hamiltonian flow; symplectic integrators
+      preserve a discrete analogue. The defining structure that makes
+      a numerical method 'symplectic' rather than merely accurate.
+    status: spec
+    decision_refs: [D001, D003]
+    bound_type: exact
+    noether_origin: "phase_space_volume_preservation"
+    phase: classical
+
+# --------------------------------------------------------------------
+# pedagogical_units — populated as we begin tracking chapter coverage
+# in Phase 1. Empty in this initial cut.
+# --------------------------------------------------------------------
+pedagogical_units: []
+
+# --------------------------------------------------------------------
+# numerical_methods — populated as integrators land in Phase 1.
+# --------------------------------------------------------------------
+numerical_methods: []
+
+# --------------------------------------------------------------------
+# code_modules — populated as actual source files land.
+# --------------------------------------------------------------------
+code_modules: []
+
+# --------------------------------------------------------------------
+# verification_cases — populated as tests land.
+# --------------------------------------------------------------------
+verification_cases: []
