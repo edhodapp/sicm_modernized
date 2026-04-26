@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Racket
+compiled/
+*.rkt~
+*.dep
+
+# CUDA / C build artifacts
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.exe
+*.cubin
+*.fatbin
+*.ptx
+
+# Build directory (Makefile output lands here once the Makefile exists)
+build/
+
+# Editor / OS noise
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# JAX / numerical caches
+.jax_cache/
+__jax_cache__/
+
+# Environment / credentials — should never appear, but defensive.
+.env
+.env.local
+*.pem
+*.key

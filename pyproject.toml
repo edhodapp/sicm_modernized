@@ -1,0 +1,110 @@
+[project]
+name = "sicm_modernized"
+version = "0.0.0"
+description = "Computational classical mechanics, GR, and QM — Sussman & Wisdom's SICM modernized for Racket CS, Python/JAX, and CUDA. Not a shipped artifact at this stage."
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Ed Hodapp", email = "ed@hodapp.com" }]
+
+# Hard floor: Python 3.11 (matches global CLAUDE.md). Dev-only at
+# this stage; nothing is published to PyPI. The ontology and audit
+# packages are the only Python code that exists today; numpy /
+# scipy / jax land when the JAX reference modules begin (D003).
+dependencies = [
+    # pydantic v2 for the ontology schema (D002 lineage). Matches
+    # iomoments and fireasmserver. pydantic v1 would force a
+    # schema-model rewrite on every cross-project port.
+    "pydantic>=2.6",
+    # YAML as the human-authoring surface for the ontology source.
+    # The DAG persistence format stays JSON (content-hash gated);
+    # YAML is only the input to the builder.
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+build-sicm-ontology = "sicm_ontology.build:main"
+audit-ontology = "audit_ontology.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "mypy>=1.11",
+    "pylint>=3.2",
+    "flake8>=7.1",
+    # PyYAML's inline stubs live in the types-PyYAML package.
+    "types-PyYAML>=6.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Package layout: the Python code lives under tooling/src/, imported
+# by short name (e.g., `sicm_ontology`, `audit_ontology`). This
+# mirrors the iomoments and fireasmserver layout (D002 lineage).
+[tool.setuptools]
+package-dir = { "" = "tooling/src" }
+
+[tool.setuptools.packages.find]
+where = ["tooling/src"]
+
+# ---------------------------------------------------------------------------
+# pytest: branch coverage is mandatory. 100% is the aspirational target;
+# fail_under stays unset until the deliberately-failing hello-world
+# pattern is in place and the first real test lands (matches iomoments).
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests", "tooling/tests"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+    "--cov=tests",
+    "--cov=sicm_ontology",
+    "--cov=audit_ontology",
+    "--cov-branch",
+    "--cov-report=term-missing",
+]
+# GPU-tagged tests are skipped in CI per D004. CI invokes pytest
+# with `-m "not gpu"`. Local pre-push runs without that filter.
+markers = [
+    "gpu: requires CUDA-capable GPU (skipped in CI per D004)",
+]
+
+[tool.coverage.run]
+branch = true
+# Coverage is measured on `tests/` and the ontology + audit
+# packages. When the JAX reference and Racket-shim layers grow,
+# add their Python entry points here.
+source = ["tests", "sicm_ontology", "audit_ontology"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# fail_under tightens as the project matures. Left unset today so
+# the deliberately-failing hello-world doesn't double-fail on
+# coverage. See iomoments for the same pattern.
+
+# ---------------------------------------------------------------------------
+# mypy --strict. Global rule; no per-file escapes without an inline
+# comment naming the concrete reason.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+strict = true
+python_version = "3.11"
+files = ["tests", "tooling/src", "tooling/tests"]
+warn_unused_configs = true
+warn_return_any = true
+warn_unreachable = true
+disallow_any_unimported = true
+mypy_path = "tooling/src"
+
+# ---------------------------------------------------------------------------
+# flake8 has no native pyproject support (as of flake8 7.x); it reads
+# setup.cfg or .flake8. The .flake8 file at repo root carries the config.
+# ---------------------------------------------------------------------------
+# [tool.flake8]
+# max-complexity = 5
+# max-line-length = 79
