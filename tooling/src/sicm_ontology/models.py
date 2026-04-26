@@ -94,9 +94,9 @@ class _OntologyNodeBase(BaseModel):
     name: SafeId
     description: Description
     status: Status = "spec"
-    decision_refs: list[DecisionId] = Field(default_factory=list)
-    implementation_refs: list[RefString] = Field(default_factory=list)
-    verification_refs: list[RefString] = Field(default_factory=list)
+    decision_refs: tuple[DecisionId, ...] = Field(default_factory=tuple)
+    implementation_refs: tuple[RefString, ...] = Field(default_factory=tuple)
+    verification_refs: tuple[RefString, ...] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
     def _check_status_refs(self) -> Self:
@@ -161,25 +161,39 @@ class MathematicalObject(_OntologyNodeBase):
 class MathematicalRelation(_OntologyNodeBase):
     """An equation or transform connecting math objects: Euler-Lagrange,
     Legendre transform, geodesic equation, Schrödinger equation,
-    path-integral measure, etc."""
+    path-integral measure, etc.
+
+    `appears_in` can target either objects or other relations
+    (relations chain: E-L appears in the action, which appears in
+    the path-integral measure). `derives_to` likewise.
+    """
 
     latex_repr: ShortName | None = None
     kind: MathRelationKind
     phase: PhaseTag
-    appears_in: list[SafeId] = Field(default_factory=list)
-    derives_to: list[SafeId] = Field(default_factory=list)
+    appears_in: tuple[SafeId, ...] = Field(default_factory=tuple)
+    derives_to: tuple[SafeId, ...] = Field(default_factory=tuple)
 
 
 class NumericalMethod(_OntologyNodeBase):
     """A finite-computation algorithm realizing one or more math objects:
     leapfrog, Yoshida-4 symplectic, split-operator FFT, Metropolis
-    path-integral MC, etc."""
+    path-integral MC, etc.
+
+    Currently `realizes` targets only objects (a method realizes the
+    Hamiltonian by integrating Hamilton's equations). If we discover
+    a need to point a method at the *relation* it applies (e.g.,
+    leapfrog applies Hamilton's equations), add an `applies` field
+    in a follow-up — non-breaking.
+    """
 
     order_of_accuracy: ShortName | None = None  # e.g., "O(h^4)"
     cost: ShortName | None = None               # e.g., "O(N log N)"
-    language_targets: list[LanguageTarget] = Field(default_factory=list)
-    realizes: list[SafeId] = Field(default_factory=list)
-    preserves: list[SafeId] = Field(default_factory=list)
+    language_targets: tuple[LanguageTarget, ...] = Field(
+        default_factory=tuple,
+    )
+    realizes: tuple[SafeId, ...] = Field(default_factory=tuple)
+    preserves: tuple[SafeId, ...] = Field(default_factory=tuple)
 
 
 class Invariant(_OntologyNodeBase):
@@ -197,8 +211,8 @@ class CodeModule(_OntologyNodeBase):
 
     path: RefString
     language: CodeLanguage
-    realizes: list[SafeId] = Field(default_factory=list)
-    implements: list[SafeId] = Field(default_factory=list)
+    realizes: tuple[SafeId, ...] = Field(default_factory=tuple)
+    implements: tuple[SafeId, ...] = Field(default_factory=tuple)
 
 
 class PedagogicalUnit(_OntologyNodeBase):
@@ -209,25 +223,37 @@ class PedagogicalUnit(_OntologyNodeBase):
     source: PedagogicalSource
     position: ShortName  # "ch3.4", "appendix-A", "lecture-19"
     title: ShortName
-    covers: list[SafeId] = Field(default_factory=list)
-    prerequisites: list[SafeId] = Field(default_factory=list)
+    covers: tuple[SafeId, ...] = Field(default_factory=tuple)
+    prerequisites: tuple[SafeId, ...] = Field(default_factory=tuple)
 
 
 class VerificationCase(_OntologyNodeBase):
     """A test that checks correctness: analytical-solution comparison,
-    JAX-reference cross-check, invariant property test, etc."""
+    JAX-reference cross-check, invariant property test, etc.
+
+    `tests` can target methods, objects, or relations (a test that
+    'Legendre transform round-trips' targets a relation; a test that
+    'leapfrog energy drift is bounded' targets a method).
+    """
 
     kind: VerificationKind
     tier: VerificationTier
     test_path: RefString  # "tests/test_x.py::test_y"
-    asserts: list[SafeId] = Field(default_factory=list)
-    tests: list[SafeId] = Field(default_factory=list)
+    asserts: tuple[SafeId, ...] = Field(default_factory=tuple)
+    tests: tuple[SafeId, ...] = Field(default_factory=tuple)
 
 
 class DecisionRef(_OntologyNodeBase):
     """Back-pointer to a DECISIONS.md entry. The ontology can name
     decisions; the audit tool will verify the decision exists in the
-    file and that the title here matches what's recorded."""
+    file and that the title here matches what's recorded.
+
+    Note: the inherited `decision_refs` field on a DecisionRef (a
+    decision pointing at other decisions) is not meaningful in this
+    schema and is silently ignored by `_check_node_decision_refs`.
+    Decisions that supersede or supersede-from each other use the
+    DECISIONS.md back-pointer convention, not ontology edges.
+    """
 
     decision_id: DecisionId
     title: ShortName  # denormalized for context
@@ -270,24 +296,30 @@ class Ontology(BaseModel):
     version: ShortName = "0.1.0"
     project: ShortName = "sicm_modernized"
 
-    mathematical_objects: list[MathematicalObject] = Field(
-        default_factory=list,
+    mathematical_objects: tuple[MathematicalObject, ...] = Field(
+        default_factory=tuple,
     )
-    mathematical_relations: list[MathematicalRelation] = Field(
-        default_factory=list,
+    mathematical_relations: tuple[MathematicalRelation, ...] = Field(
+        default_factory=tuple,
     )
-    numerical_methods: list[NumericalMethod] = Field(default_factory=list)
-    invariants: list[Invariant] = Field(default_factory=list)
-    code_modules: list[CodeModule] = Field(default_factory=list)
-    pedagogical_units: list[PedagogicalUnit] = Field(default_factory=list)
-    verification_cases: list[VerificationCase] = Field(default_factory=list)
-    decisions: list[DecisionRef] = Field(default_factory=list)
+    numerical_methods: tuple[NumericalMethod, ...] = Field(
+        default_factory=tuple,
+    )
+    invariants: tuple[Invariant, ...] = Field(default_factory=tuple)
+    code_modules: tuple[CodeModule, ...] = Field(default_factory=tuple)
+    pedagogical_units: tuple[PedagogicalUnit, ...] = Field(
+        default_factory=tuple,
+    )
+    verification_cases: tuple[VerificationCase, ...] = Field(
+        default_factory=tuple,
+    )
+    decisions: tuple[DecisionRef, ...] = Field(default_factory=tuple)
 
     # ---- helpers (private, used by validators) --------------------------
 
     @staticmethod
     def _resolve_refs(
-        refs: list[str],
+        refs: tuple[str, ...],
         valid_targets: set[str],
         context: str,
         target_label: str,
@@ -303,37 +335,48 @@ class Ontology(BaseModel):
     # ---- validators ------------------------------------------------------
 
     @model_validator(mode="after")
-    def _check_unique_names(self) -> Self:
-        """Node names must be unique within their kind."""
+    def _check_global_unique_names(self) -> Self:
+        """Node names must be globally unique across all eight kinds.
+
+        Per-kind uniqueness alone leaves cross-reference resolution
+        ambiguous when an edge field unions multiple kinds (e.g.,
+        VerificationCase.tests against numerical_methods or
+        mathematical_objects; MathematicalRelation.derives_to
+        against mathematical_objects or mathematical_relations).
+        Reject the ambiguity at construction time. Catches both
+        within-kind duplicates and cross-kind collisions in one pass.
+        """
+        name_to_locations: dict[str, list[str]] = {}
         for label, items in self._iter_node_kinds():
-            seen: set[str] = set()
-            for n in items:
-                if n.name in seen:
-                    raise ValueError(
-                        f"duplicate name {n.name!r} in {label}",
-                    )
-                seen.add(n.name)
+            for node in items:
+                name_to_locations.setdefault(node.name, []).append(label)
+        for name, locations in name_to_locations.items():
+            if len(locations) > 1:
+                raise ValueError(
+                    f"name {name!r} is not globally unique; appears "
+                    f"in: {locations}. Names must be unique across "
+                    f"all ontology kinds so cross-kind edges resolve "
+                    f"unambiguously.",
+                )
         return self
 
-    def _iter_node_kinds(self) -> list[tuple[str, list[_OntologyNodeBase]]]:
-        """Iterator over (label, list-of-nodes) for the eight kinds."""
+    def _iter_node_kinds(
+        self,
+    ) -> list[tuple[str, tuple[_OntologyNodeBase, ...]]]:
+        """Iterator over (label, tuple-of-nodes) for the eight kinds.
+
+        Returns the underlying tuples directly (no defensive copy)
+        since the tuples are themselves immutable.
+        """
         return [
-            ("mathematical_objects",
-             list(self.mathematical_objects)),
-            ("mathematical_relations",
-             list(self.mathematical_relations)),
-            ("numerical_methods",
-             list(self.numerical_methods)),
-            ("invariants",
-             list(self.invariants)),
-            ("code_modules",
-             list(self.code_modules)),
-            ("pedagogical_units",
-             list(self.pedagogical_units)),
-            ("verification_cases",
-             list(self.verification_cases)),
-            ("decisions",
-             list(self.decisions)),
+            ("mathematical_objects", self.mathematical_objects),
+            ("mathematical_relations", self.mathematical_relations),
+            ("numerical_methods", self.numerical_methods),
+            ("invariants", self.invariants),
+            ("code_modules", self.code_modules),
+            ("pedagogical_units", self.pedagogical_units),
+            ("verification_cases", self.verification_cases),
+            ("decisions", self.decisions),
         ]
 
     @model_validator(mode="after")
@@ -350,13 +393,14 @@ class Ontology(BaseModel):
     def _check_relation_refs(self) -> None:
         math_obj_names = {n.name for n in self.mathematical_objects}
         math_rel_names = {n.name for n in self.mathematical_relations}
+        obj_or_rel = math_obj_names | math_rel_names
         for r in self.mathematical_relations:
             self._resolve_refs(
-                r.appears_in, math_obj_names,
-                f"{r.name}.appears_in", "mathematical_object",
+                r.appears_in, obj_or_rel,
+                f"{r.name}.appears_in", "math object/relation",
             )
             self._resolve_refs(
-                r.derives_to, math_obj_names | math_rel_names,
+                r.derives_to, obj_or_rel,
                 f"{r.name}.derives_to", "math object/relation",
             )
 
@@ -401,16 +445,18 @@ class Ontology(BaseModel):
 
     def _check_verification_refs(self) -> None:
         math_obj_names = {n.name for n in self.mathematical_objects}
+        math_rel_names = {n.name for n in self.mathematical_relations}
         method_names = {n.name for n in self.numerical_methods}
         invariant_names = {n.name for n in self.invariants}
+        valid_targets = method_names | math_obj_names | math_rel_names
         for v in self.verification_cases:
             self._resolve_refs(
                 v.asserts, invariant_names,
                 f"{v.name}.asserts", "invariant",
             )
             self._resolve_refs(
-                v.tests, method_names | math_obj_names,
-                f"{v.name}.tests", "numerical_method/mathematical_object",
+                v.tests, valid_targets,
+                f"{v.name}.tests", "method/object/relation",
             )
 
     def _check_decision_back_refs(self) -> None:

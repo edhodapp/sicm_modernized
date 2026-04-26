@@ -62,18 +62,34 @@ def load_ontology(path: Path) -> Ontology:
 
 
 def save_ontology(ontology: Ontology, path: Path) -> str:
-    """Persist an Ontology to JSON via atomic tempfile + rename.
+    """Persist an Ontology to JSON plus a SHA-256 sidecar.
 
-    Writes a sibling ``<path>.sha256`` containing the canonical hash
-    of the saved snapshot for integrity checking by consumers.
-    Returns the hash hex digest.
+    Both files are written via tempfile + ``os.replace``, so each
+    individually is atomic against torn writes. POSIX provides no
+    cross-file atomicity, so a crash between the two replaces would
+    leave a stale sidecar (mismatch surfaces loudly on the next
+    ``verify_snapshot`` — recovery is rerunning the build, which
+    rewrites both). Returns the hash hex digest.
     """
-    parent = path.parent
-    parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = ontology.model_dump(mode="json")
     text = json.dumps(payload, sort_keys=True, indent=2) + "\n"
     digest = canonical_hash(ontology)
+    sidecar = path.with_suffix(path.suffix + ".sha256")
 
+    _atomic_write_text(path, text)
+    _atomic_write_text(sidecar, digest + "\n")
+    return digest
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write `content` to `path` atomically via tempfile + os.replace.
+
+    On any failure the tempfile is cleaned up and the original
+    exception re-raises (cleanup errors are swallowed so they can't
+    mask the root cause).
+    """
+    parent = path.parent
     fd = tempfile.NamedTemporaryFile(
         mode="w",
         dir=str(parent),
@@ -82,28 +98,29 @@ def save_ontology(ontology: Ontology, path: Path) -> str:
         encoding="utf-8",
     )
     try:
-        fd.write(text)
+        fd.write(content)
         fd.close()
         os.replace(fd.name, str(path))
     except BaseException:
         _cleanup_tempfile(fd, fd.name)
         raise
 
-    sidecar = path.with_suffix(path.suffix + ".sha256")
-    sidecar.write_text(digest + "\n", encoding="utf-8")
-    return digest
-
 
 def verify_snapshot(path: Path) -> bool:
     """Verify the on-disk snapshot's hash matches its sidecar.
 
     Returns True when the snapshot is valid and the hashes match,
-    False when there is no sidecar to compare against, raises
-    ValueError when the hashes disagree.
+    False when there is no sidecar to compare against. Raises
+    FileNotFoundError when the snapshot file itself is absent
+    (distinguishing "missing snapshot" from "tampered snapshot"),
+    and raises ValueError when the file is present but its hash
+    disagrees with the sidecar.
 
-    The loud failure on mismatch is intentional — silent acceptance
-    of a tampered or stale snapshot would defeat the purpose.
+    The loud failures on mismatch are intentional — silent acceptance
+    of a tampered or missing snapshot would defeat the purpose.
     """
+    if not path.exists():
+        raise FileNotFoundError(f"snapshot file not found: {path}")
     sidecar = path.with_suffix(path.suffix + ".sha256")
     if not sidecar.exists():
         return False

@@ -17,18 +17,25 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from sicm_ontology.dag import canonical_hash, load_ontology, save_ontology
+from sicm_ontology.dag import canonical_hash, save_ontology
 from sicm_ontology.models import Ontology
 
 # tooling/src/sicm_ontology/build.py
 # parents[0]=sicm_ontology, [1]=src, [2]=tooling, [3]=<repo-root>.
+#
+# Default paths assume editable install (`pip install -e ".[dev]"`),
+# which is the only supported install mode for this project (we
+# never publish to PyPI). Editable install keeps __file__ pointing
+# to the in-tree source location, so parents[3] correctly resolves
+# to the repo root. For non-editable installs (a hypothetical
+# package consumer) use --source and --out to specify paths
+# explicitly; the defaults will not be meaningful.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_SOURCE = _REPO_ROOT / "tooling" / "sicm-ontology.yaml"
 _DEFAULT_OUT = _REPO_ROOT / "tooling" / "sicm-ontology.json"
@@ -81,18 +88,26 @@ def build(
 
 
 def _is_snapshot_unchanged(out_path: Path, new_digest: str) -> bool:
-    """True iff the on-disk snapshot's content hash matches new_digest.
+    """True iff the on-disk sidecar's recorded hash matches new_digest.
 
-    Returns False on missing file or corrupted JSON, so the caller
-    rewrites in either case rather than skipping silently.
+    Compares against the .sha256 sidecar text directly rather than
+    re-hashing the snapshot. This makes the check self-healing on
+    partial-failure states: if save_ontology updated the JSON but
+    failed before updating the sidecar (or vice versa), the recorded
+    hash diverges from new_digest and we trigger a full rewrite.
+
+    Returns False whenever either file is missing or unreadable, so
+    the caller rewrites in any ambiguous state rather than skipping
+    silently.
     """
-    if not out_path.exists():
+    sidecar = out_path.with_suffix(out_path.suffix + ".sha256")
+    if not (out_path.exists() and sidecar.exists()):
         return False
     try:
-        current = load_ontology(out_path)
-    except (json.JSONDecodeError, ValueError):
+        recorded = sidecar.read_text(encoding="utf-8").strip()
+    except OSError:
         return False
-    return canonical_hash(current) == new_digest
+    return recorded == new_digest
 
 
 def _summarize(ontology: Ontology) -> str:
