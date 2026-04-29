@@ -40,6 +40,27 @@ Beyond standard linting and unit testing, the project requires verification case
 - JAX-reference comparison as cross-implementation oracle
 - (When QM lands) Path-integral classical limit: stationary-phase recovery as `ℏ → 0`
 
+## Code-review discipline
+
+Code review (Gemini, clean-Claude subagent, or any independent review)
+produces findings. **Triage decisions belong to Ed.** Claude's job is
+to:
+
+1. Surface every finding with a recommended disposition
+   (fix / defer / reject) and a one-line rationale.
+2. Stop and wait for Ed's explicit call on each finding.
+3. Apply only the dispositions Ed has approved.
+
+This applies to all severities, including LOW. "Premature
+optimization," "matches existing pattern," and "doesn't matter at
+our scale" are reasoning Claude can offer — never reasoning Claude
+can use to skip surfacing the decision. Until the Day 2a.5
+automation lands, this rule is enforced by Claude's own discipline
+and Ed's review of triage tables.
+
+Origin: established 2026-04-26 after Claude triaged seven Day 2a
+findings unilaterally before Ed reviewed.
+
 ## License and posture
 sicm_modernized is licensed **GNU AGPL-3.0-or-later**. Ed Hodapp is sole author and sole copyright holder. **No external contributions accepted** — preserves consolidated copyright ownership so Ed retains relicensing flexibility. Commercial users who cannot accept AGPL's §13 network-copyleft route to Ed for a commercial license / consulting engagement.
 

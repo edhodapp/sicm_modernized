@@ -2,56 +2,72 @@
   "code_modules": [],
   "decisions": [
     {
+      "archive": false,
       "decision_id": "D001",
       "decision_refs": [],
+      "deprecated": false,
       "description": "Initiate sicm_modernized; modernize SICM 1e/2e + FDG; extend to\nGR (geodesics in fixed backgrounds) and QM (Schr\u00f6dinger + path\nintegral + phase-space). Working package name pinned; final\nartifact title deferred.\n",
       "implementation_refs": [
         "DECISIONS.md:D001"
       ],
       "name": "D001",
+      "rationale": null,
       "status": "implemented",
+      "superseded_by": null,
       "title": "Project scope and working name",
       "verification_refs": [
         "DECISIONS.md:D001"
       ]
     },
     {
+      "archive": false,
       "decision_id": "D002",
       "decision_refs": [],
+      "deprecated": false,
       "description": "Apply the iomoments/fireasm SysE-discipline pattern (ontology\nDAG, audit, two-tier gates, immutable DECISIONS.md). Re-derived,\nnot forked from python_agent.\n",
       "implementation_refs": [
         "DECISIONS.md:D002"
       ],
       "name": "D002",
+      "rationale": null,
       "status": "implemented",
+      "superseded_by": null,
       "title": "CD-first deliverable mode; methodology re-derived from iomoments + fireasm",
       "verification_refs": [
         "DECISIONS.md:D002"
       ]
     },
     {
+      "archive": false,
       "decision_id": "D003",
       "decision_refs": [],
+      "deprecated": false,
       "description": "Racket CS symbolic top; Typed Racket numerical mid; Python +\nJAX as test oracle and prototyping; CUDA C for production GPU.\nHybrid (option C) JAX-as-oracle posture.\n",
       "implementation_refs": [
         "DECISIONS.md:D003"
       ],
       "name": "D003",
+      "rationale": null,
       "status": "implemented",
+      "superseded_by": null,
       "title": "Language stack: Racket CS + Python + JAX + CUDA C",
       "verification_refs": [
         "DECISIONS.md:D003"
       ]
     },
     {
+      "archive": false,
       "decision_id": "D004",
       "decision_refs": [],
+      "deprecated": false,
       "description": "GPU-tagged tests run pre-push only; CI skips them. GitHub Pro\ndoes not include GPU runners in its free quota.\n",
       "implementation_refs": [
         "DECISIONS.md:D004"
       ],
       "name": "D004",
+      "rationale": null,
       "status": "implemented",
+      "superseded_by": null,
       "title": "GPU testing policy: local-only, never in CI",
       "verification_refs": [
         "DECISIONS.md:D004"
@@ -60,6 +76,7 @@
   ],
   "invariants": [
     {
+      "archive": false,
       "bound_type": "bounded_drift",
       "decision_refs": [
         "D001"
@@ -69,10 +86,12 @@
       "name": "energy_conservation",
       "noether_origin": "time_translation_symmetry",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     },
     {
+      "archive": false,
       "bound_type": "exact",
       "decision_refs": [
         "D001",
@@ -83,12 +102,14 @@
       "name": "symplectic_2_form",
       "noether_origin": "phase_space_volume_preservation",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     }
   ],
   "mathematical_objects": [
     {
+      "archive": false,
       "decision_refs": [
         "D001"
       ],
@@ -98,10 +119,12 @@
       "latex_repr": "S = int L dt",
       "name": "action",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     },
     {
+      "archive": false,
       "decision_refs": [
         "D001"
       ],
@@ -111,10 +134,12 @@
       "latex_repr": "L(q, qdot, t)",
       "name": "lagrangian",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     },
     {
+      "archive": false,
       "decision_refs": [
         "D001"
       ],
@@ -124,6 +149,7 @@
       "latex_repr": "H(q, p, t)",
       "name": "hamiltonian",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     }
@@ -134,6 +160,7 @@
         "lagrangian",
         "action"
       ],
+      "archive": false,
       "decision_refs": [
         "D001"
       ],
@@ -144,6 +171,7 @@
       "latex_repr": "d/dt (dL/dqdot) - dL/dq = 0",
       "name": "euler_lagrange",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     },
@@ -151,6 +179,7 @@
       "appears_in": [
         "lagrangian"
       ],
+      "archive": false,
       "decision_refs": [
         "D001"
       ],
@@ -163,6 +192,7 @@
       "latex_repr": "H = p qdot - L",
       "name": "legendre_transform",
       "phase": "classical",
+      "rationale": null,
       "status": "spec",
       "verification_refs": []
     }

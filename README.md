@@ -85,6 +85,7 @@ references at load time and refuses unknowns.
 - `code_module --realizes--> mathematical_object`
 - `code_module --implements--> numerical_method`
 - `numerical_method --realizes--> mathematical_object`
+- `numerical_method --applies--> mathematical_relation`
 - `numerical_method --preserves--> invariant`
 - `mathematical_relation --derives_to--> mathematical_object | mathematical_relation`
 - `pedagogical_unit --covers--> mathematical_object`
@@ -100,8 +101,64 @@ Every node carries `status ∈ {spec, tested, implemented, deviation, n_a}`:
 - `spec` — written down; no `implementation_refs`, no `verification_refs`
 - `tested` — `verification_refs` populated; `implementation_refs` may be empty
 - `implemented` — both ref lists populated
-- `deviation` — system does not satisfy this; rationale belongs in description
-- `n_a` — not applicable to current scope; retained for traceability
+- `deviation` — system does not satisfy this; **`rationale` field required** documenting why
+- `n_a` — not applicable to current scope; **`rationale` field required** documenting why
+
+Every node carries an optional `rationale` field. It is *required*
+when status is `deviation` or `n_a` (so the audit tool can surface
+the deviation with its justification attached); it is optional and
+useful for any other status to document a non-obvious choice.
+
+### Active vs historical DAG branch
+
+Every node also carries `archive: bool = False`. Setting `archive=True`
+moves the node onto the historical branch and **requires a `rationale`**
+explaining why. The active branch is the project's working set; the
+historical branch retains traceability to superseded structures and
+decisions without polluting the active formal-knowledge graph.
+
+`DecisionRef` nodes have two extra fields tracking supersession:
+
+- `deprecated: bool = False` — this decision has been superseded.
+- `superseded_by: DecisionId | None = None` — names the *immediate*
+  successor (per global CLAUDE.md, supersession chains link one step
+  at a time so any link reaches its neighbor in one hop).
+
+`deprecated` and `superseded_by` are biconditional: a DecisionRef
+is `deprecated=True` iff it carries a `superseded_by` pointer.
+
+For `DecisionRef` specifically, `archive` and `deprecated` are also
+biconditional: supersession is the only path onto the historical
+branch for a decision. Other node kinds use `archive` independently
+because they have no `deprecated` field.
+
+The active-branch invariant enforced at construction time:
+
+> A non-archived node may not depend on a deprecated decision —
+> directly or transitively. Either set `archive=True` (with
+> rationale) or update the dependency chain to point at the active
+> successor.
+
+A node *directly* depends on a decision when its own `decision_refs`
+names that decision. A node *transitively* depends when any node it
+points at along its forward-dependency edges is itself directly or
+transitively pinned. Forward-dependency edges (per
+`_OUTGOING_EDGE_FIELDS` in `models.py`):
+
+| node kind | dependency fields |
+|---|---|
+| `MathematicalRelation` | `appears_in`, `derives_to` |
+| `NumericalMethod` | `realizes`, `applies`, `preserves` |
+| `CodeModule` | `realizes`, `implements` |
+| `PedagogicalUnit` | `covers`, `prerequisites` |
+| `VerificationCase` | `asserts`, `tests` |
+
+`MathematicalObject` and `Invariant` are foundations (no outgoing
+dependency edges); `DecisionRef` is exempt entirely (its supersession
+lifecycle lives on `superseded_by`, not these edges). The transitive
+closure is computed at construction time via reverse-edge BFS over
+the directly-pinned seed set; any non-archived member of the closure
+is rejected.
 
 The discipline is enforced at Pydantic-validation time. The
 `audit-ontology` tool (Day 3) additionally resolves
