@@ -38,10 +38,21 @@ def canonical_hash(ontology: Ontology) -> str:
     differently, which doubles as a "did someone reshuffle the list"
     signal.
     """
+    return _canonical_hash_from_payload(ontology.model_dump(mode="json"))
+
+
+def _canonical_hash_from_payload(payload: Any) -> str:
+    """SHA-256 over an already-dumped pydantic payload.
+
+    Split out so `save_ontology` can dump once and reuse the same
+    payload for both the on-disk pretty JSON and the compact-
+    canonical hash form, instead of dumping the model twice. The
+    public `canonical_hash(ontology)` entry point preserves the
+    one-call API for callers (e.g., `verify_snapshot`) that don't
+    already hold a payload.
+    """
     canonical = json.dumps(
-        ontology.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
+        payload, sort_keys=True, separators=(",", ":"),
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -49,15 +60,22 @@ def canonical_hash(ontology: Ontology) -> str:
 def load_ontology(path: Path) -> Ontology:
     """Load an Ontology from the JSON snapshot file.
 
-    Validation failures are raised, not swallowed: the snapshot is
-    the project's formal-knowledge artifact, and a corrupted file
-    must surface loudly. FileNotFoundError is the only silent path
-    (returns an empty Ontology so the bootstrap build can run).
+    Loud failures by design. The snapshot is the project's
+    formal-knowledge artifact, so:
+
+    - A missing file raises `FileNotFoundError` (from
+      `path.open`). Earlier versions silently returned an
+      empty `Ontology()` here for a hypothetical bootstrap path,
+      but no actual call site relied on that — silent empties
+      would make a typo'd `path` argument indistinguishable from
+      a freshly-initialized project, which is debug-hostile. If
+      a caller genuinely needs the bootstrap behavior they should
+      construct `Ontology()` explicitly at the call site.
+    - JSON parse errors (`json.JSONDecodeError`) and Pydantic
+      validation errors (`ValidationError`) propagate.
     """
-    if not path.exists():
-        return Ontology()
-    text = path.read_text(encoding="utf-8")
-    data: Any = json.loads(text)
+    with path.open("r", encoding="utf-8") as fh:
+        data: Any = json.load(fh)
     return Ontology.model_validate(data)
 
 
@@ -74,7 +92,7 @@ def save_ontology(ontology: Ontology, path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = ontology.model_dump(mode="json")
     text = json.dumps(payload, sort_keys=True, indent=2) + "\n"
-    digest = canonical_hash(ontology)
+    digest = _canonical_hash_from_payload(payload)
     sidecar = path.with_suffix(path.suffix + ".sha256")
 
     _atomic_write_text(path, text)
@@ -84,6 +102,29 @@ def save_ontology(ontology: Ontology, path: Path) -> str:
 
 def _atomic_write_text(path: Path, content: str) -> None:
     """Write `content` to `path` atomically via tempfile + os.replace.
+
+    `flush` + `os.fsync` on the file fd before close + replace so
+    the file's data blocks are durable before the rename publishes
+    the new path. Without the file fsync, POSIX permits the kernel
+    to re-order data and metadata commits — the directory entry
+    could update to point at the tempfile's inode while the inode's
+    data blocks remain unwritten, leaving a zero-length file at
+    `path` after a power-loss recovery. The data fsync forecloses
+    that window.
+
+    Scope of the durability claim: this routine guarantees the
+    file's CONTENT is durable before the rename runs, and that the
+    rename is atomic against torn writes (in-flight POSIX
+    semantics). It does NOT fsync the parent directory after the
+    rename, so a power loss between `os.replace` returning and the
+    directory inode hitting disk can still lose the rename itself
+    — recovery would see the old file at `path` (or no entry, if
+    this was the first write). For a build-snapshot artifact that
+    is regenerated from YAML on demand, this trade-off is
+    acceptable; if a future caller needs full crash-durability of
+    the publication step, add `os.fsync(os.open(parent,
+    O_DIRECTORY))` after the replace, with platform-portability
+    handling (Windows does not allow fsync on a directory).
 
     On any failure the tempfile is cleaned up and the original
     exception re-raises (cleanup errors are swallowed so they can't
@@ -99,6 +140,8 @@ def _atomic_write_text(path: Path, content: str) -> None:
     )
     try:
         fd.write(content)
+        fd.flush()
+        os.fsync(fd.fileno())
         fd.close()
         os.replace(fd.name, str(path))
     except BaseException:
@@ -118,6 +161,16 @@ def verify_snapshot(path: Path) -> bool:
 
     The loud failures on mismatch are intentional — silent acceptance
     of a tampered or missing snapshot would defeat the purpose.
+
+    By design, the hash is computed via `canonical_hash(load_ontology(
+    path))` — a full Pydantic validate-then-canonicalize round-trip,
+    not a raw byte hash of the on-disk JSON. This is deliberate: the
+    round-trip catches semantic drift on a hand-edited snapshot that
+    still parses (e.g., status discipline broken, dangling refs)
+    *in addition to* byte-level tampering. The cost is microseconds
+    at any plausible ontology size; the stronger contract is worth
+    it because Day 3 audit tooling treats this snapshot as
+    trustable in both senses.
     """
     if not path.exists():
         raise FileNotFoundError(f"snapshot file not found: {path}")
@@ -135,13 +188,35 @@ def verify_snapshot(path: Path) -> bool:
 
 
 def _cleanup_tempfile(fd: Any, name: str) -> None:
-    """Best-effort close + unlink; swallow everything so the caller's
-    original exception is the one that propagates."""
+    """Best-effort close + unlink for `_atomic_write_text`'s except branch.
+
+    Runs during exception propagation: an earlier write/fsync/
+    replace raised, the caller is about to re-raise. We swallow
+    secondary failures here so they do not mask the original
+    exception — that is the helper's whole reason to exist. The
+    swallows cover the realistic OS-layer failure modes from the
+    cleanup operations themselves:
+
+    - `fd.close()` may raise `OSError` (broken pipe, ENOSPC, fd
+      already gone) or `ValueError` (close on a corrupted file
+      object state). `fd.close()` is idempotent on success in
+      CPython's `_TemporaryFileWrapper`, so the no-op second close
+      in the post-write failure path is harmless.
+    - `os.unlink(name)` may raise any `OSError` subclass:
+      `FileNotFoundError` for concurrent removal,
+      `PermissionError` if the directory mode changed mid-flight,
+      EBUSY on some filesystems. All swallow into the same
+      best-effort path.
+
+    Pulled out of `_atomic_write_text` so each side stays under the
+    project complexity ceiling (max-complexity = 5); inlining would
+    re-collapse the split.
+    """
     try:
         fd.close()
-    except Exception:  # pylint: disable=broad-except
+    except (OSError, ValueError):
         pass
     try:
         os.unlink(name)
-    except FileNotFoundError:
+    except OSError:
         pass
