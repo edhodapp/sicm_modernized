@@ -18,13 +18,17 @@ input="$(cat)"
 # backslash-continuation ambiguity inside the single-quoted source.
 command="$(printf '%s' "$input" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("tool_input",{}).get("command",""))')"
 
-# Permissive match: any command containing "git commit" anywhere
-# (catches `cd ... && git commit ...`, `env X=Y git commit ...`, etc.).
-# False-positives on `echo "git commit"` are tolerated — the gate
-# refusal is loud enough that the user notices.
-case "$command" in
-    *"git commit"*) ;;
-    *) exit 0 ;;
-esac
+# Word-boundary match: fire only when "git commit" is the actual
+# subcommand — at the start of the command, or immediately after a
+# recognized shell separator (&&, ;, ||). Followed by whitespace or
+# end-of-string so `git commit-tree` / `git commit-graph` plumbing
+# does not match. Filters quoted-string false-positives like
+# `echo "git commit"` (the leading `"` doesn't match any of the
+# allowed prefixes) and argument false-positives like
+# `grep "git commit" file`.
+RE='(^|&&[[:space:]]+|;[[:space:]]+|\|\|[[:space:]]+)git[[:space:]]+commit([[:space:]]|$)'
+if [[ ! "$command" =~ $RE ]]; then
+    exit 0
+fi
 
 exec "$(dirname "$0")/check-review-decisions.sh"

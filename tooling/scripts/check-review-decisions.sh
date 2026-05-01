@@ -51,6 +51,11 @@ problems=()
 # keyword (e.g. "do not **defer** review findings") cannot
 # accidentally satisfy the gate.
 while IFS= read -r line; do
+    # Strip trailing CR so a file hand-edited with CRLF endings
+    # (e.g., on Windows) does not silently false-positive a properly-
+    # dispositioned line as MALFORMED via the trailing \r breaking
+    # date-anchor matching.
+    line="${line%$'\r'}"
     if [[ "$line" == '```'* ]]; then
         in_codefence=$((1 - in_codefence))
         continue
@@ -58,7 +63,7 @@ while IFS= read -r line; do
     if (( in_codefence == 1 )); then
         continue
     fi
-    if [[ "$line" =~ ^##[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+    if [[ "$line" =~ ^##[[:space:]]+[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]) ]]; then
         in_session=1
         continue
     fi
@@ -67,7 +72,7 @@ while IFS= read -r line; do
     fi
     if [[ "$line" =~ ^-[[:space:]] ]]; then
         total=$((total + 1))
-        if [[ "$line" =~ \*\*(fix|defer|reject)\*\*[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+        if [[ "$line" =~ \*\*(fix|defer|reject)\*\*[[:space:]]+[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]) ]]; then
             continue
         fi
         if [[ "$line" =~ \*\*(fix|defer|reject)\*\* ]]; then
