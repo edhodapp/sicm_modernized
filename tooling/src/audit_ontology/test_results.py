@@ -113,11 +113,14 @@ TestHardware = Literal["cpu", "gpu"]
 # Backend: which numerical / symbolic substrate ran the test. Same
 # axis as `language_targets` on NumericalMethod nodes in the
 # ontology, but extended with "lean" for proof-environment
-# verification once Phase-2 work begins.
+# verification once Phase-2 work begins. Backend names are
+# version-free (`jax-cuda` not `jax-cuda12`); the specific CUDA /
+# JAX / mathlib version is recorded in `Environment.flags`
+# (e.g., a flag like `cuda:12.4` or `mathlib:rev-abc123`).
 TestBackend = Literal[
     "numpy",
     "jax-cpu",
-    "jax-cuda12",
+    "jax-cuda",
     "racket",
     "cuda-c",
     "lean",
@@ -140,9 +143,10 @@ class Environment(BaseModel):
     asking for jax-cpu does not accept a jax-cuda12 result.
 
     `flags` is a free-form labels tuple (e.g., "compiler:nvcc-12.4",
-    "rng-seed-fixed", "perf-mode"). The validator sorts it on
-    construction so two equivalent environments with the same flag
-    set hash identically regardless of producer-side ordering.
+    "rng-seed-fixed", "perf-mode"). The validator sorts AND
+    deduplicates on construction so two equivalent environments
+    with the same flag set hash identically regardless of
+    producer-side ordering or accidental duplication.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -155,9 +159,11 @@ class Environment(BaseModel):
 
     @field_validator("flags")
     @classmethod
-    def _sort_flags(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        """Normalize flag order so equality is content-only."""
-        return tuple(sorted(value))
+    def _sort_and_dedupe_flags(
+        cls, value: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        """Normalize: sort + dedupe so equality is set-semantics."""
+        return tuple(sorted(set(value)))
 
 
 class TestResult(BaseModel):
@@ -166,13 +172,15 @@ class TestResult(BaseModel):
     `verification_ref` follows REQUIREMENTS.md's `path::test_function`
     convention for pytest tests; for non-pytest engines (Racket,
     Lean, raw CUDA C) the producer documents its mapping at the
-    producer site. `captured_git_sha` is the full 40-character
-    lower-hex SHA-1 of HEAD at result-capture time. `captured_at`
-    is a timezone-aware datetime; the validator pins UTC.
-    `scalar_measurements` is free-form `(name, float)` pairs (perf
-    numbers, error magnitudes, etc.); a future `measurements` field
-    name is reserved for a richer Measurement submodel covering
-    units, kinds, and string-valued metadata.
+    producer site. `captured_git_sha` is the hex SHA of HEAD at
+    result-capture time; the regex accepts 40 chars (SHA-1, Git's
+    historical default) or 64 chars (SHA-256, supported since
+    Git 2.29 and the project's eventual target), case-insensitive.
+    `captured_at` is a timezone-aware datetime; the validator pins
+    UTC. `scalar_measurements` is free-form `(name, float)` pairs
+    (perf numbers, error magnitudes, etc.); a future `measurements`
+    field name is reserved for a richer Measurement submodel
+    covering units, kinds, and string-valued metadata.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -180,7 +188,9 @@ class TestResult(BaseModel):
     verification_ref: RefString
     environment: Environment
     outcome: TestOutcome
-    captured_git_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    captured_git_sha: str = Field(
+        pattern=r"^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+    )
     captured_at: AwareDatetime
     scalar_measurements: tuple[tuple[str, float], ...] = Field(
         default_factory=tuple,
