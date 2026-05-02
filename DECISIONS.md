@@ -206,3 +206,134 @@ gpu"` to skip them. Pre-push runs the full suite without filtering.
 - If a class of bugs starts escaping to publicly-visible artifacts
   because pre-push is skipped on a tired evening, tighten enforcement
   (e.g., require GPU-test-passed-on-this-commit metadata at push).
+
+---
+
+## D005 — Lean as Phase-2+ formal-verification track (2026-05-01)
+
+**Decision.** Adopt **Lean 4 + mathlib4** as the formal-verification
+track for `sicm_modernized`. A new committed file `REQUIREMENTS.md`
+(landed separately) carries formal requirements derived from the
+DECISIONS log; each requirement may be discharged by any combination
+of three verification kinds:
+
+- `verification_refs` — executable tests (empirical, sampled inputs)
+- `proof_refs` — Lean theorem names (formal, all inputs satisfying
+  hypotheses)
+- `implementation_refs` — code locations realizing the requirement
+
+`proof_refs` is the new ref-kind introduced by this decision. Its
+audit-gate semantics: each name must resolve to a `theorem` /
+`lemma` / `def` in the project's Lean code, and the file must
+compile under the pinned Lean+mathlib toolchain.
+
+**Rationale.**
+
+The project's academic posture — action-principle keystone, the
+MIT 6.946 lineage we believe was last offered in Fall 2024 (cf.
+project memory `mit_course_retirement.md`; not independently
+re-verified against an authoritative MIT source as of this entry),
+FDG/GR/QM phase arc — makes formal verification a natural and
+load-bearing differentiator, not a luxury.
+A textbook that ships with mechanically-verified theorems alongside
+empirical tests carries a stronger claim than one that ships with
+either alone. Concretely:
+
+- Tests bound `|H_numerical - H_analytical|` over 1000 sampled
+  initial conditions. A Lean theorem can establish the *bound itself*
+  over all initial conditions in some characterized set.
+- "δS = 0 implies the Euler-Lagrange equations" is a textbook
+  derivation today. As a Lean theorem under mathlib's differential-
+  geometric machinery, it becomes a mechanically-checked artifact
+  the project ships.
+- Symplectic-integrator backward error analysis (perturbed
+  Hamiltonian H̃ = H + O(h^p), exact preservation of H̃, bounded
+  drift in H over exponentially long times) is exactly the kind of
+  numerical-analysis claim that empirical sampling cannot establish.
+  Whether a clean Lean discharge is *achievable* at mathlib's current
+  state is a separate question from whether the goal is right.
+
+**Methodology lineage.** The traceability chain
+`DECISIONS.md → REQUIREMENTS.md → {tests, proofs, code}` is
+re-derived from fireasmserver's requirements-from-decisions pattern,
+extended with the `proof_refs` dimension specific to this project's
+academic scope. Per global "principles transfer; processes do not":
+the chain abstraction transfers; the specific REQ category prefixes,
+audit-tool wiring, and Lean+mathlib toolchain integration are
+project-local.
+
+**Scope of this decision.**
+
+In scope:
+- Adoption of Lean 4 + mathlib4 as the formal-verification toolchain.
+- Reservation of a `proofs/` directory at repo root for Lean code.
+- Reservation of the `proof_refs: tuple[str, ...]` field on REQ
+  entries (and, optionally, ontology nodes) for theorem-name
+  back-pointers.
+- Phase-1 use limited to **theorem statements without proofs**
+  (`sorry`-bodied stubs). The forcing function of writing the
+  precise statement against mathlib's types is itself valuable
+  even before the proof discharges.
+- Phase-2 (geometric machinery) onward: proofs discharged for
+  theorems that benefit, prioritizing those where mathlib's
+  differential-geometry coverage already supports the lemmas.
+
+Not in scope (deferred to later D-N entries):
+- The exact mathlib version pin and update cadence.
+- The CI strategy for Lean compilation (it can be slow; cache
+  strategy + when to recompile from clean is its own design).
+- The ordering of which theorems get proven first.
+- The shape of Lean-Racket bridge code (if any). Bridging is
+  orthogonal to verification — Lean proves properties, Racket
+  computes; the proofs constrain what the computations are
+  allowed to deviate from, but the proofs themselves don't run
+  numerically.
+- The exact spelling of `proof_refs` entries — bare theorem name
+  vs. fully-qualified path (`Sicm.Mechanics.Lagrangian.foo`) vs.
+  `(module, name)` tuple. The `tuple[str, ...]` shape is
+  reserved here for the field, but the per-entry namespacing
+  convention is left to a later D-N once enough Lean code exists
+  to know what disambiguation actually needs to carry. Bare names
+  collide across modules; that's known and will be addressed
+  before any cross-module references land.
+
+**Honest cost ledger.**
+
+- A new toolchain (`lake` build system, `lean-toolchain` pin,
+  mathlib4 dependency) sits alongside Python/Racket/CUDA-C.
+- mathlib4 compiles slowly (gigabytes of `.olean` cache); a clean
+  CI rebuild is minutes-long even on warm caches.
+- Mathlib coverage is uneven for physics-specific structures.
+  Differential forms / exterior derivative and Riemannian metrics
+  have nontrivial coverage. Symplectic geometry as a developed
+  theory (Darboux, moment maps, symplectic reduction) is
+  thin-to-absent at the time of this entry; specific
+  symplectic-integrator lemmas, path-integral measure theory, and
+  any QFT path-integral construction are absent. Phase-2 work
+  will need to contribute auxiliary lemmas; this is expected, not
+  a blocker.
+- The maintainer's formal-math skill axis is a documented constraint
+  (project memory `tutoring_required.md`); Lean proof work will lean
+  heavily on AI assistance. This is real but tractable; the alternative
+  (no formal verification) leaves the academic claim weaker.
+
+**Re-evaluation triggers.**
+- If Lean+mathlib compilation costs become a CI bottleneck not
+  cleanly mitigated by caching, revisit.
+- If the proof-discharge skill burden outpaces what Ed + AI can
+  sustainably carry, scope down to theorem-statement-only work
+  permanently and seek community contributions for proof bodies.
+- If a sibling project adopts Lean for a similar reason, revisit
+  whether a shared toolchain extraction is appropriate (per
+  `python_agent`-style abstraction discovery).
+- If mathlib's physics coverage matures to the point where symplectic
+  integrator backward-error analysis becomes routine, accelerate
+  Phase-2 proof targets.
+
+**Companion artifacts (landing alongside this decision).**
+- `tooling/src/audit_ontology/` package stub — gives the eventual
+  audit work a real home and resolves the `pyproject.toml` coverage
+  source reference that was previously unbacked.
+- The `proof_refs` field on REQ entries lands when REQUIREMENTS.md
+  itself lands (separate first-torque pass per the engine-head
+  bolt-tightening discipline).
