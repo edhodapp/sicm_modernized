@@ -207,6 +207,24 @@ class TestResult(BaseModel):
             )
         return value
 
+    @field_validator("captured_git_sha")
+    @classmethod
+    def _lowercase_sha(cls, value: str) -> str:
+        """Normalize SHA to lowercase so case-different hexes
+        of the same commit dedup correctly."""
+        return value.lower()
+
+    @field_validator("scalar_measurements")
+    @classmethod
+    def _sort_measurements(
+        cls, value: tuple[tuple[str, float], ...],
+    ) -> tuple[tuple[str, float], ...]:
+        """Sort by metric name so producer-side ordering doesn't
+        break content-hash dedup. Duplicate names are preserved
+        (time-series semantics; see GA8 task).
+        """
+        return tuple(sorted(value, key=lambda pair: pair[0]))
+
 
 class TestResultsSnapshot(BaseModel):
     """A frozen append-only collection of TestResult records.
