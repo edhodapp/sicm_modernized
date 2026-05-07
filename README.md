@@ -187,6 +187,55 @@ project-local. SICM is the third independent re-derivation across the
 trio; surviving abstractions become candidates for an eventual common
 toolkit.
 
+## Requirements and verification
+
+[`REQUIREMENTS.md`](REQUIREMENTS.md) is the project's immutable
+requirements log. Each requirement is a verifiable assertion derived
+from one or more decisions in `DECISIONS.md`, phrased per
+[RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) /
+[RFC 8174](https://datatracker.ietf.org/doc/html/rfc8174)
+(this project uses `SHALL` / `SHOULD` / `MAY`; see
+`REQUIREMENTS.md` for the full convention) and identified by a stable
+per-category ID (`PHYS-`, `INFRA-`, …). As with decisions, requirement
+text is never edited or deleted; supersession is annotation-only,
+mirroring the `DECISIONS.md` convention.
+
+Three discharge mechanisms are tracked per requirement:
+
+- **`verification_refs`** — executable tests (empirical, sampled
+  inputs).
+- **`implementation_refs`** — code locations realizing the
+  requirement.
+- **`proof_refs`** — Lean theorem names (formal; all inputs
+  satisfying the stated hypotheses). Reserved by `DECISIONS.md` D005;
+  populated as Phase-2 work lands.
+
+D005 commits **Lean 4 + mathlib4** as the project's formal-
+verification toolchain, with a `proofs/` directory reserved at repo
+root. Phase-1 use is limited to theorem statements without proofs
+(`sorry`-bodied stubs) — writing a precise statement against
+mathlib's types is itself valuable, even before any proof is
+supplied. Phase-2 (geometric machinery) onward, proofs are
+discharged where the cost is justified — prioritizing theorems
+whose lemmas mathlib's differential-geometry layer already covers.
+Cost ledger and re-evaluation triggers are documented in D005.
+
+The audit gate that consumes this graph is staged in
+[`tooling/src/audit_ontology/`](tooling/src/audit_ontology/). The
+`test_results` module (schema only today; producers and audit code
+arrive in Phase 1) defines the data shape for a content-hashed,
+append-only log of test outcomes. The eventual audit answers, for
+each tested requirement: *does a recent passing result exist under
+every required environment, captured at or after all the relevant
+`implementation_refs` were last edited?* Four failure modes are
+pinned in the schema docstring (`STALE_RESULT`, `RUNNER_FORGOT`,
+`ENV_NEVER_EXERCISED`, `UNTRACKED_FILE`). `proof_refs`, being
+formal, are not subject to the recency check — a discharged Lean
+theorem stands until its statement is changed or the toolchain
+pin moves. The `audit-ontology` console script currently exits
+non-zero by design; wiring it into a pre-push gate waits for the
+real implementation.
+
 ## Quality gates
 
 The project operates in CD-first deliverable mode (`DECISIONS.md`
@@ -212,6 +261,12 @@ land in the next scaffolding pass.
   proposing any architectural change.
 - [`DECISIONS.md`](DECISIONS.md) — immutable architectural
   decision log.
+- [`REQUIREMENTS.md`](REQUIREMENTS.md) — immutable requirements
+  log; see [Requirements and verification](#requirements-and-verification)
+  above for the format and the three discharge mechanisms.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — single-author project;
+  no external contributions accepted (front-door notice and
+  commercial-license contact path).
 - [`CLAUDE.md`](CLAUDE.md) — project-local Claude Code
   instructions.
 
